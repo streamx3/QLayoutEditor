@@ -1,9 +1,13 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include <QSettings>
+#include <QStandardItemModel>
 #include <QStringList>
 #include <QMainWindow>
+#include <QSettings>
+#include <QMap>
+
+#include <magic_enum/magic_enum.hpp>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -51,6 +55,10 @@ private slots:
 
     void on_pushButtonInfo_clicked();
 
+    void on_pushButtonImport_clicked();
+
+    void on_pushButtonExport_clicked();
+
 private:
     void loadLanguages(RegType type);
     RegType Index2RegType(int index);
@@ -58,9 +66,12 @@ private:
     QString kbid2NameFuzzy(QString kbid);
 
 private:
+    QMap<RegType, QList<Language>> m_languages;
+    QMap<RegType,QString> m_addresses;
     QList<QStringList> m_kbids;
     Ui::MainWindow *ui;
     QSettings m_settings;
     RegType m_type;
+    QStandardItemModel *m_model;
 };
 #endif // MAINWINDOW_H

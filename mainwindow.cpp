@@ -1,3 +1,5 @@
+#include <QStandardItem>
+
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
 
@@ -9,6 +11,33 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+
+    setWindowFlags(Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint);
+
+    ui->pushButtonImport->setVisible(false);
+    ui->pushButtonExport->setVisible(false);
+    ui->pushButtonAdd->setVisible(false);
+
+    m_model = new QStandardItemModel(this);
+    m_model->setColumnCount(3);
+    ui->tableView->setModel(m_model);
+    ui->tableView->setFocusPolicy(Qt::NoFocus);
+    ui->tableView->setSelectionMode(QAbstractItemView::SingleSelection);
+    ui->tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    ui->tableView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    ui->tableView->setStyleSheet(
+        "QTableView::item:focus { outline: none; }"
+        );
+    ui->tableView->horizontalHeader()->hide();
+    ui->tableView->verticalHeader()->hide();
+
+    ui->tableView->verticalHeader()->setStretchLastSection(false);
+    ui->tableView->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+
+    m_addresses = {
+        { RegType::CurUser, "HKEY_CURRENT_USER\\Keyboard Layout\\Preload" },
+        { RegType::System,  "HKEY_USERS\\.DEFAULT\\Keyboard Layout\\Preload"}
+    };
 
     /// Source: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/windows-language-pack-default-values?view=windows-11
     m_kbids = {
@@ -286,14 +315,17 @@ QString MainWindow::kbid2NameFuzzy(QString kbid) {
 
 void MainWindow::loadLanguages(RegType type) {
     QStringList ret;
-    QString CurUser = "HKEY_CURRENT_USER\\Keyboard Layout\\Preload";
-    QString System = "HKEY_USERS\\.DEFAULT\\Keyboard Layout\\Preload";
+    // QString CurUser = "HKEY_CURRENT_USER\\Keyboard Layout\\Preload";
+    // QString System = "HKEY_USERS\\.DEFAULT\\Keyboard Layout\\Preload";
     QString address;
-    if (type == RegType::CurUser) {
-        address = CurUser;
-    } else {
-        address = System;
+    if (type == RegType::Unknown) {
+        qDebug().noquote() << "Invalid language storage type!";
+        return;
     }
+
+    qDebug().noquote() << "Language storage type:" << magic_enum::enum_name(type);
+
+    address = m_addresses[type];
 
     QSettings settings(address, QSettings::NativeFormat);
 
@@ -301,13 +333,14 @@ void MainWindow::loadLanguages(RegType type) {
 
     qDebug() << list;
 
-    QList<Language> languages;
+    m_model->removeRows(0, m_model->rowCount());
+    m_model->setRowCount(list.size());
 
-    size_t row = 0;
+    ui->tableView->setColumnWidth(0, 10);
+    ui->tableView->setColumnWidth(1, 64);
+    ui->tableView->setColumnWidth(2, 156);
 
-    ui->tableWidget->setRowCount(list.size());
-    ui->tableWidget->setColumnCount(3);
-
+    int row = 0;
     for (auto it = list.begin(); it != list.end(); ++it) {
         Language lang;
         lang.id = *it;
@@ -319,27 +352,31 @@ void MainWindow::loadLanguages(RegType type) {
             lang.name = "Invalid";
         }
         qDebug().noquote() << lang.id << " " << lang.kbid << " " << lang.name << " " << (lang.invalid ? "-" : "+");
-        languages.append(lang);
+        //languages.append(lang);
 
         // auto v = settings.value(*i);
         // qDebug() << v.toString();
+        m_model->setItem(row, 0, new QStandardItem(lang.id));
+        m_model->setItem(row, 1, new QStandardItem(lang.kbid));
 
-        auto idItem = new QTableWidgetItem(lang.id);
-        // idItem.set
-        ui->tableWidget->setColumnWidth(0, 10);
-        ui->tableWidget->setColumnWidth(1, 64);
-        ui->tableWidget->setColumnWidth(2, 156);
-        ui->tableWidget->setItem(row, 0, idItem);
-        auto kbidItem = new QTableWidgetItem(lang.kbid);
-        ui->tableWidget->setItem(row, 1, kbidItem);
-        auto nameItem = new QTableWidgetItem(lang.name);
+        //auto idItem = new QStandardItem(lang.id);
+        //// idItem.set
+        //ui->tableView->setColumnWidth(0, 18);
+        //ui->tableView->setColumnWidth(1, 64);
+        //ui->tableView->setColumnWidth(2, 170);
+        //ui->tableView->setItem(row, 0, idItem);
+        //auto kbidItem = new QStandardItem(lang.kbid);
+        //ui->tableView->setItem(row, 1, kbidItem);
+        auto nameItem = new QStandardItem(lang.name);
+        QColor color;
         if (lang.invalid) {
-            QColor color("crimson");
+            color = QColor("crimson");
             QBrush brush(color);
             nameItem->setBackground(brush);
             nameItem->setToolTip("Invalid Keyboard ID, name mich be deducted incorrectly");
         }
-        ui->tableWidget->setItem(row, 2, nameItem);
+
+        m_model->setItem(row, 2, nameItem);
 
         ++row;
     }
@@ -359,7 +396,13 @@ void MainWindow::on_pushButtonAdd_clicked() {
 }
 
 void MainWindow::on_pushButtonUp_clicked() {
-    qDebug().noquote() << "Up clicked";
+//     qDebug().noquote() << "Up clicked";
+//     qDebug().noquote() << "Row:" << ui->tableView->currentRow();
+//     // if (ui->tableWidget->selectionModel()->selectedRows().isEmpty()) {
+//     //     ui->tableWidget->selectRow(0);
+//     // }
+//     qDebug().noquote() << "Selected->isEmpty:"
+//         << ui->tableView->selectionModel()->selectedRows().isEmpty();
 }
 
 void MainWindow::on_pushButtonDown_clicked() {
@@ -372,4 +415,12 @@ void MainWindow::on_pushButtonRemove_clicked() {
 
 void MainWindow::on_pushButtonInfo_clicked() {
     qDebug().noquote() << "Info clicked";
+}
+
+void MainWindow::on_pushButtonImport_clicked() {
+    qDebug().noquote() << "Import clicked";
+}
+
+void MainWindow::on_pushButtonExport_clicked() {
+    qDebug().noquote() << "Export clicked";
 }

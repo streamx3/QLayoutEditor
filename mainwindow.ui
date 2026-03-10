@@ -10,11 +10,17 @@
     <height>255</height>
    </rect>
   </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
   <property name="windowTitle">
    <string>QLayoutEditor</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="QTableWidget" name="tableWidget">
+   <widget class="QTableView" name="tableView">
     <property name="geometry">
      <rect>
       <x>10</x>
@@ -23,19 +29,22 @@
       <height>192</height>
      </rect>
     </property>
-    <attribute name="horizontalHeaderVisible">
+    <property name="editTriggers">
+     <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
+    </property>
+    <attribute name="horizontalHeaderHighlightSections">
      <bool>false</bool>
     </attribute>
     <attribute name="verticalHeaderVisible">
-     <bool>false</bool>
-    </attribute>
-    <attribute name="verticalHeaderMinimumSectionSize">
-     <number>12</number>
-    </attribute>
-    <attribute name="verticalHeaderDefaultSectionSize">
-     <number>24</number>
+     <bool>true</bool>
     </attribute>
     <attribute name="verticalHeaderHighlightSections">
+     <bool>false</bool>
+    </attribute>
+    <attribute name="verticalHeaderShowSortIndicator" stdset="0">
+     <bool>true</bool>
+    </attribute>
+    <attribute name="verticalHeaderStretchLastSection">
      <bool>true</bool>
     </attribute>
    </widget>
@@ -177,6 +186,42 @@
     </property>
     <property name="text">
      <string>Info</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButtonImport">
+    <property name="geometry">
+     <rect>
+      <x>110</x>
+      <y>10</y>
+      <width>71</width>
+      <height>29</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>Import</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButtonExport">
+    <property name="geometry">
+     <rect>
+      <x>196</x>
+      <y>10</y>
+      <width>71</width>
+      <height>29</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>Export</string>
     </property>
    </widget>
   </widget>
