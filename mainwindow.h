@@ -59,6 +59,8 @@ private slots:
 
     void on_pushButtonExport_clicked();
 
+    void onRowSelected(const QModelIndex &current, const QModelIndex &previous);
+
 private:
     void loadLanguages(RegType type);
     RegType Index2RegType(int index);
@@ -71,7 +73,10 @@ private:
     QList<QStringList> m_kbids;
     Ui::MainWindow *ui;
     QSettings m_settings;
-    RegType m_type;
+    RegType m_curType;
     QStandardItemModel *m_model;
+    int m_tabIndex = -1;
+    bool m_isDark = false;
+
 };
 #endif // MAINWINDOW_H

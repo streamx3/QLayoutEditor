@@ -1,4 +1,6 @@
 #include <QStandardItem>
+#include <QGuiApplication>
+#include <QStyleHints>
 
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
@@ -10,6 +12,7 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
 {
+    m_curType = RegType::CurUser;
     ui->setupUi(this);
 
     setWindowFlags(Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint);
@@ -18,9 +21,15 @@ MainWindow::MainWindow(QWidget *parent)
     ui->pushButtonExport->setVisible(false);
     ui->pushButtonAdd->setVisible(false);
 
+    auto scheme = QGuiApplication::styleHints()->colorScheme();
+    m_isDark = (scheme == Qt::ColorScheme::Dark);
+    qDebug().noquote() << "isDark:" << m_isDark;
+
     m_model = new QStandardItemModel(this);
     m_model->setColumnCount(3);
     ui->tableView->setModel(m_model);
+    connect(ui->tableView->selectionModel(), &QItemSelectionModel::currentRowChanged,
+            this, &MainWindow::onRowSelected);
     ui->tableView->setFocusPolicy(Qt::NoFocus);
     ui->tableView->setSelectionMode(QAbstractItemView::SingleSelection);
     ui->tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -314,7 +323,7 @@ QString MainWindow::kbid2NameFuzzy(QString kbid) {
 }
 
 void MainWindow::loadLanguages(RegType type) {
-    QStringList ret;
+    QList<Language> languages;
     // QString CurUser = "HKEY_CURRENT_USER\\Keyboard Layout\\Preload";
     // QString System = "HKEY_USERS\\.DEFAULT\\Keyboard Layout\\Preload";
     QString address;
@@ -351,6 +360,7 @@ void MainWindow::loadLanguages(RegType type) {
         if (lang.name == "") {
             lang.name = "Invalid";
         }
+        languages.push_back(lang);
         qDebug().noquote() << lang.id << " " << lang.kbid << " " << lang.name << " " << (lang.invalid ? "-" : "+");
         //languages.append(lang);
 
@@ -380,11 +390,26 @@ void MainWindow::loadLanguages(RegType type) {
 
         ++row;
     }
+    m_languages[type] = languages;
+}
+
+void MainWindow::onRowSelected(const QModelIndex &current, const QModelIndex &previous) {
+    Q_UNUSED(previous);
+    if (!current.isValid())
+        return;
+    int row = current.row();
+    qDebug().noquote() << "Row selected:" << row
+                       << "id:"   << m_model->item(row, 0)->text()
+                       << "kbid:" << m_model->item(row, 1)->text()
+                       << "name:" << m_model->item(row, 2)->text();
+                       // <<
+    m_tabIndex = row;
 }
 
 void MainWindow::on_comboBox_currentIndexChanged(int index) {
     qDebug().noquote() << "Index: " << index;
-    loadLanguages(Index2RegType(ui->comboBox->currentIndex()));
+    m_curType = Index2RegType(ui->comboBox->currentIndex());
+    loadLanguages(m_curType);
 }
 
 void MainWindow::on_pushButtonSave_clicked() {
@@ -395,14 +420,20 @@ void MainWindow::on_pushButtonAdd_clicked() {
     qDebug().noquote() << "Add clicked";
 }
 
+template<typename T>
+void moveUp(QList<T>& list, int index) {
+    if (index > 0 && index < list.size()) {
+        list.swapItemsAt(index, index - 1);
+    }
+}
+
 void MainWindow::on_pushButtonUp_clicked() {
-//     qDebug().noquote() << "Up clicked";
-//     qDebug().noquote() << "Row:" << ui->tableView->currentRow();
-//     // if (ui->tableWidget->selectionModel()->selectedRows().isEmpty()) {
-//     //     ui->tableWidget->selectRow(0);
-//     // }
-//     qDebug().noquote() << "Selected->isEmpty:"
-//         << ui->tableView->selectionModel()->selectedRows().isEmpty();
+    qDebug().noquote() << "Up clicked";
+    if (m_tabIndex < 0) {
+        qDebug().noquote() << "Nothing selected!";
+        return;
+    }
+    moveUp(m_languages[m_curType], m_tabIndex);
 }
 
 void MainWindow::on_pushButtonDown_clicked() {
