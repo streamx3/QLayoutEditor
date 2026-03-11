@@ -412,6 +412,37 @@ void MainWindow::on_comboBox_currentIndexChanged(int index) {
 
 void MainWindow::on_pushButtonSave_clicked() {
     qDebug().noquote() << "Save clicked";
+
+    for (auto it = m_languages.constBegin(); it != m_languages.constEnd(); ++it) {
+        const RegType type = it.key();
+        const QList<Language> &languages = it.value();
+
+        if (!m_addresses.contains(type))
+            continue;
+
+        QSettings settings(m_addresses[type], QSettings::NativeFormat);
+
+        // Remove all existing values before rewriting
+        const QStringList existingKeys = settings.allKeys();
+        for (const auto &key : existingKeys)
+            settings.remove(key);
+
+        // Write back with sequential ids reflecting the current order
+        int id = 1;
+        for (const auto &lang : languages)
+            settings.setValue(QString::number(id++), lang.kbid);
+
+        if (settings.status() != QSettings::NoError) {
+            QMessageBox::warning(this, tr("Save failed"),
+                                 tr("Could not write to registry for %1.\n"
+                                    "Try running as administrator.")
+                                     .arg(m_addresses[type]));
+            return;
+        }
+
+        qDebug().noquote() << "Saved" << languages.size()
+                           << "entries to" << m_addresses[type];
+    }
 }
 
 void MainWindow::on_pushButtonAdd_clicked() {

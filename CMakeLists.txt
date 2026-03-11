@@ -22,6 +22,10 @@ set(PROJECT_SOURCES
         # third_party/magic_enum/include/magic_enum.hpp
 )
 
+if(WIN32)
+    list(APPEND PROJECT_SOURCES app.rc)
+endif()
+
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(${PROJECT_NAME}
         MANUAL_FINALIZATION
@@ -76,3 +80,10 @@ install(TARGETS ${PROJECT_NAME}
 if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(${PROJECT_NAME})
 endif()
+
+# if (WIN32)
+#     # This linker flag embeds a manifest that requests admin privileges (UAC prompt)
+#     set_target_properties(${PROJECT_NAME} PROPERTIES
+#         LINK_FLAGS "/MANIFESTUAC:\"level='requireAdministrator' uiAccess='false'\""
+#     )
+# endif()
