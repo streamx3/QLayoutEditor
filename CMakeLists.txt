@@ -17,6 +17,8 @@ set(PROJECT_SOURCES
         mainwindow.cpp
         mainwindow.h
         mainwindow.ui
+        addlanguagedialog.cpp
+        addlanguagedialog.h
         # third_party/magic_enum/include/magic_enum.hpp
 )
 

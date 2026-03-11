@@ -1,6 +1,7 @@
 #include <QStandardItem>
 #include <QGuiApplication>
 #include <QStyleHints>
+#include "addlanguagedialog.h"
 #include <QFileDialog>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -415,6 +416,36 @@ void MainWindow::on_pushButtonSave_clicked() {
 
 void MainWindow::on_pushButtonAdd_clicked() {
     qDebug().noquote() << "Add clicked";
+
+    AddLanguageDialog dlg(m_kbids, this);
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    const QStringList entry = dlg.selectedEntry();
+    if (entry.size() < 2)
+        return;
+
+    Language lang;
+    lang.kbid    = entry[1];
+    lang.name    = kbid2Name(lang.kbid);
+    lang.invalid = lang.name.isEmpty();
+    lang.name    = kbid2NameFuzzy(lang.kbid);
+    if (lang.name.isEmpty())
+        lang.name = "Invalid";
+
+    // Assign the next sequential registry key id (max existing + 1)
+    auto &list = m_languages[m_curType];
+    int maxId = 0;
+    for (const auto &l : list) {
+        bool ok;
+        const int id = l.id.toInt(&ok);
+        if (ok && id > maxId)
+            maxId = id;
+    }
+    lang.id = QString::number(maxId + 1);
+
+    list.append(lang);
+    populateTable(list);
 }
 
 template<typename T>
@@ -459,6 +490,23 @@ void MainWindow::on_pushButtonDown_clicked() {
 
 void MainWindow::on_pushButtonRemove_clicked() {
     qDebug().noquote() << "Remove clicked";
+
+    auto &list = m_languages[m_curType];
+    if (m_tabIndex < 0 || m_tabIndex >= list.size()) {
+        qDebug().noquote() << "Nothing selected!";
+        return;
+    }
+
+    list.removeAt(m_tabIndex);
+    populateTable(list);
+
+    // Keep selection on the same position, or the new last row if we removed the last item
+    if (!list.isEmpty()) {
+        m_tabIndex = qMin(m_tabIndex, list.size() - 1);
+        ui->tableView->selectRow(m_tabIndex);
+    } else {
+        m_tabIndex = -1;
+    }
 }
 
 void MainWindow::on_pushButtonInfo_clicked() {
