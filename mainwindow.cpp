@@ -1,6 +1,11 @@
 #include <QStandardItem>
 #include <QGuiApplication>
 #include <QStyleHints>
+#include <QFileDialog>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QMessageBox>
 
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
@@ -17,9 +22,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     setWindowFlags(Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint);
 
-    ui->pushButtonImport->setVisible(false);
-    ui->pushButtonExport->setVisible(false);
-    ui->pushButtonAdd->setVisible(false);
+    // ui->pushButtonImport->setVisible(false);
+    // ui->pushButtonExport->setVisible(false);
+    // ui->pushButtonAdd->setVisible(false);
 
     auto scheme = QGuiApplication::styleHints()->colorScheme();
     m_isDark = (scheme == Qt::ColorScheme::Dark);
@@ -263,6 +268,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     // qDebug() << m_kbids;
 
+    fetchLanguages(RegType::CurUser);
+    fetchLanguages(RegType::System);
     loadLanguages(Index2RegType(ui->comboBox->currentIndex()));
 }
 
@@ -460,8 +467,107 @@ void MainWindow::on_pushButtonInfo_clicked() {
 
 void MainWindow::on_pushButtonImport_clicked() {
     qDebug().noquote() << "Import clicked";
+
+    const QString path = QFileDialog::getOpenFileName(
+        this, tr("Import languages"), {}, tr("JSON files (*.json)"));
+    if (path.isEmpty())
+        return;
+
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Import failed"),
+                             tr("Could not open file for reading:\n%1").arg(path));
+        return;
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parseError);
+    file.close();
+
+    if (doc.isNull()) {
+        QMessageBox::warning(this, tr("Import failed"),
+                             tr("Invalid JSON: %1").arg(parseError.errorString()));
+        return;
+    }
+    if (!doc.isObject()) {
+        QMessageBox::warning(this, tr("Import failed"),
+                             tr("Expected a JSON object at root."));
+        return;
+    }
+
+    const QJsonObject root = doc.object();
+    for (auto it = root.constBegin(); it != root.constEnd(); ++it) {
+        const auto regType = magic_enum::enum_cast<RegType>(it.key().toStdString());
+        if (!regType.has_value()) {
+            qDebug().noquote() << "Unknown RegType key, skipping:" << it.key();
+            continue;
+        }
+        if (!it.value().isArray()) {
+            qDebug().noquote() << "Expected array for key" << it.key() << ", skipping";
+            continue;
+        }
+
+        QList<Language> languages;
+        for (const QJsonValue &val : it.value().toArray()) {
+            if (!val.isObject())
+                continue;
+            const QJsonObject entry = val.toObject();
+
+            Language lang;
+            lang.id   = entry["id"].toString();
+            lang.kbid = entry["kbid"].toString();
+
+            // Re-derive name from m_kbids — ignore whatever "name" says in the JSON
+            lang.name    = kbid2Name(lang.kbid);
+            lang.invalid = lang.name.isEmpty();
+            lang.name    = kbid2NameFuzzy(lang.kbid);
+            if (lang.name.isEmpty())
+                lang.name = "Invalid";
+
+            languages.append(lang);
+        }
+        m_languages[regType.value()] = languages;
+    }
+
+    if (m_languages.contains(m_curType))
+        populateTable(m_languages[m_curType]);
+
+    qDebug().noquote() << "Imported from" << path;
 }
 
 void MainWindow::on_pushButtonExport_clicked() {
     qDebug().noquote() << "Export clicked";
+
+    const QString path = QFileDialog::getSaveFileName(
+        this, tr("Export languages"), {}, tr("JSON files (*.json)"));
+    if (path.isEmpty())
+        return;
+
+    QJsonObject root;
+    for (auto it = m_languages.constBegin(); it != m_languages.constEnd(); ++it) {
+        const QString key = QString::fromStdString(
+            std::string(magic_enum::enum_name(it.key())));
+
+        QJsonArray arr;
+        for (const auto &lang : it.value()) {
+            QJsonObject entry;
+            entry["id"]      = lang.id;
+            entry["kbid"]    = lang.kbid;
+            entry["name"]    = lang.name;
+            entry["invalid"] = lang.invalid;
+            arr.append(entry);
+        }
+        root[key] = arr;
+    }
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Export failed"),
+                             tr("Could not open file for writing:\n%1").arg(path));
+        return;
+    }
+    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    file.close();
+
+    qDebug().noquote() << "Exported to" << path;
 }
