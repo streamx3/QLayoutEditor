@@ -322,75 +322,65 @@ QString MainWindow::kbid2NameFuzzy(QString kbid) {
     return {};
 }
 
-void MainWindow::loadLanguages(RegType type) {
+QList<Language> MainWindow::fetchLanguages(RegType type) {
     QList<Language> languages;
-    // QString CurUser = "HKEY_CURRENT_USER\\Keyboard Layout\\Preload";
-    // QString System = "HKEY_USERS\\.DEFAULT\\Keyboard Layout\\Preload";
-    QString address;
+
     if (type == RegType::Unknown) {
         qDebug().noquote() << "Invalid language storage type!";
-        return;
+        return languages;
     }
 
     qDebug().noquote() << "Language storage type:" << magic_enum::enum_name(type);
 
-    address = m_addresses[type];
+    QSettings settings(m_addresses[type], QSettings::NativeFormat);
+    const auto keys = settings.allKeys();
+    qDebug() << keys;
 
-    QSettings settings(address, QSettings::NativeFormat);
+    for (const auto &key : keys) {
+        Language lang;
+        lang.id   = key;
+        lang.kbid = settings.value(key).toString();
+        lang.name = kbid2Name(lang.kbid);
+        lang.invalid = lang.name.isEmpty();
+        lang.name = kbid2NameFuzzy(lang.kbid);
+        if (lang.name.isEmpty())
+            lang.name = "Invalid";
 
-    auto list = settings.allKeys();
+        qDebug().noquote() << lang.id << lang.kbid << lang.name << (lang.invalid ? "-" : "+");
+        languages.append(lang);
+    }
 
-    qDebug() << list;
+    m_languages[type] = languages;
+    return languages;
+}
 
+void MainWindow::populateTable(const QList<Language> &languages) {
     m_model->removeRows(0, m_model->rowCount());
-    m_model->setRowCount(list.size());
+    m_model->setRowCount(languages.size());
 
     ui->tableView->setColumnWidth(0, 10);
     ui->tableView->setColumnWidth(1, 64);
     ui->tableView->setColumnWidth(2, 156);
 
     int row = 0;
-    for (auto it = list.begin(); it != list.end(); ++it) {
-        Language lang;
-        lang.id = *it;
-        lang.kbid = settings.value(*it).toString();
-        lang.name = kbid2Name(lang.kbid);
-        lang.invalid = (lang.name == "");
-        lang.name = kbid2NameFuzzy(lang.kbid);
-        if (lang.name == "") {
-            lang.name = "Invalid";
-        }
-        languages.push_back(lang);
-        qDebug().noquote() << lang.id << " " << lang.kbid << " " << lang.name << " " << (lang.invalid ? "-" : "+");
-        //languages.append(lang);
-
-        // auto v = settings.value(*i);
-        // qDebug() << v.toString();
+    for (const auto &lang : languages) {
         m_model->setItem(row, 0, new QStandardItem(lang.id));
         m_model->setItem(row, 1, new QStandardItem(lang.kbid));
 
-        //auto idItem = new QStandardItem(lang.id);
-        //// idItem.set
-        //ui->tableView->setColumnWidth(0, 18);
-        //ui->tableView->setColumnWidth(1, 64);
-        //ui->tableView->setColumnWidth(2, 170);
-        //ui->tableView->setItem(row, 0, idItem);
-        //auto kbidItem = new QStandardItem(lang.kbid);
-        //ui->tableView->setItem(row, 1, kbidItem);
         auto nameItem = new QStandardItem(lang.name);
-        QColor color;
         if (lang.invalid) {
-            color = QColor("crimson");
-            QBrush brush(color);
-            nameItem->setBackground(brush);
+            nameItem->setBackground(QBrush(QColor("crimson")));
             nameItem->setToolTip("Invalid Keyboard ID, name mich be deducted incorrectly");
         }
-
         m_model->setItem(row, 2, nameItem);
 
         ++row;
     }
-    m_languages[type] = languages;
+}
+
+void MainWindow::loadLanguages(RegType type) {
+    fetchLanguages(type);
+    populateTable(m_languages[type]);
 }
 
 void MainWindow::onRowSelected(const QModelIndex &current, const QModelIndex &previous) {
@@ -429,15 +419,35 @@ void moveUp(QList<T>& list, int index) {
 
 void MainWindow::on_pushButtonUp_clicked() {
     qDebug().noquote() << "Up clicked";
-    if (m_tabIndex < 0) {
-        qDebug().noquote() << "Nothing selected!";
+    if (m_tabIndex <= 0) {
+        qDebug().noquote() << (m_tabIndex < 0 ? "Nothing selected!" : "Already at top!");
         return;
     }
     moveUp(m_languages[m_curType], m_tabIndex);
+    --m_tabIndex;
+    populateTable(m_languages[m_curType]);
+    ui->tableView->selectRow(m_tabIndex);
+}
+
+template<typename T>
+void moveDown(QList<T>& list, int index)
+{
+    if (index >= 0 && index < list.size() - 1) {
+        list.swapItemsAt(index, index + 1);
+    }
 }
 
 void MainWindow::on_pushButtonDown_clicked() {
     qDebug().noquote() << "Down clicked";
+    const int lastIndex = m_languages[m_curType].size() - 1;
+    if (m_tabIndex < 0 || m_tabIndex >= lastIndex) {
+        qDebug().noquote() << (m_tabIndex < 0 ? "Nothing selected!" : "Already at bottom!");
+        return;
+    }
+    moveDown(m_languages[m_curType], m_tabIndex);
+    ++m_tabIndex;
+    populateTable(m_languages[m_curType]);
+    ui->tableView->selectRow(m_tabIndex);
 }
 
 void MainWindow::on_pushButtonRemove_clicked() {

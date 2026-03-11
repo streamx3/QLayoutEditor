@@ -63,6 +63,8 @@ private slots:
 
 private:
     void loadLanguages(RegType type);
+    QList<Language> fetchLanguages(RegType type);
+    void populateTable(const QList<Language> &languages);
     RegType Index2RegType(int index);
     QString kbid2Name(QString kbid);
     QString kbid2NameFuzzy(QString kbid);
