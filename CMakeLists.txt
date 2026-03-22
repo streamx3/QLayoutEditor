@@ -19,6 +19,7 @@ set(PROJECT_SOURCES
         mainwindow.ui
         addlanguagedialog.cpp
         addlanguagedialog.h
+        resources.qrc
         # third_party/magic_enum/include/magic_enum.hpp
 )
 
@@ -81,9 +82,10 @@ if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(${PROJECT_NAME})
 endif()
 
-# if (WIN32)
-#     # This linker flag embeds a manifest that requests admin privileges (UAC prompt)
-#     set_target_properties(${PROJECT_NAME} PROPERTIES
-#         LINK_FLAGS "/MANIFESTUAC:\"level='requireAdministrator' uiAccess='false'\""
-#     )
-# endif()
+if (WIN32)
+    # app.rc embeds the manifest (CREATEPROCESS_MANIFEST_RESOURCE_ID = 1),
+    # so disable the linker's auto-generated manifest to avoid duplicate resource error.
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        LINK_FLAGS "/MANIFEST:NO"
+    )
+endif()

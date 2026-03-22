@@ -1,3 +1,5 @@
+#include <qt_windows.h>
+
 #include <QStandardItem>
 #include <QGuiApplication>
 #include <QStyleHints>
@@ -412,6 +414,46 @@ void MainWindow::on_comboBox_currentIndexChanged(int index) {
     loadLanguages(m_curType);
 }
 
+void MainWindow::reloadKeyboardLayouts()
+{
+    // Unload all currently loaded layouts.
+    // Windows will refuse to unload the currently active one, so this is safe.
+    int count = GetKeyboardLayoutList(0, nullptr);
+    if (count > 0) {
+        QVector<HKL> hkls(count);
+        GetKeyboardLayoutList(count, hkls.data());
+        for (HKL hkl : hkls)
+            UnloadKeyboardLayout(hkl);
+    }
+
+    // Reload layouts from the saved CurUser list.
+    // LoadKeyboardLayout without KLF_NOTELLSHELL notifies the shell (tray indicator).
+    const auto &curUserLayouts = m_languages.value(RegType::CurUser);
+    int loaded = 0;
+    for (const auto &lang : curUserLayouts) {
+        auto wkbid = lang.kbid.toStdWString();
+        HKL hkl = LoadKeyboardLayout(wkbid.c_str(), KLF_REORDER);
+        if (hkl)
+            ++loaded;
+        else
+            qDebug().noquote() << "LoadKeyboardLayout failed for kbid:" << lang.kbid
+                               << "error:" << GetLastError();
+    }
+
+    // Broadcast that input locale settings changed.
+    // Use SMTO_NORMAL (not SMTO_ABORTIFHUNG) so the shell isn't skipped when busy.
+    // Also PostMessage for async shell components (e.g. Windows 10/11 input indicator).
+    DWORD_PTR result;
+    SendMessageTimeout(HWND_BROADCAST, WM_SETTINGCHANGE, 0,
+                       reinterpret_cast<LPARAM>(L"intl"),
+                       SMTO_NORMAL, 5000, &result);
+    PostMessage(HWND_BROADCAST, WM_SETTINGCHANGE, 0,
+                reinterpret_cast<LPARAM>(L"intl"));
+
+    qDebug().noquote() << "Reloaded" << loaded << "/" << curUserLayouts.size()
+                       << "keyboard layout(s), WM_SETTINGCHANGE result:" << result;
+}
+
 void MainWindow::on_pushButtonSave_clicked() {
     qDebug().noquote() << "Save clicked";
 
@@ -423,11 +465,7 @@ void MainWindow::on_pushButtonSave_clicked() {
             continue;
 
         QSettings settings(m_addresses[type], QSettings::NativeFormat);
-
-        // Remove all existing values before rewriting
-        const QStringList existingKeys = settings.allKeys();
-        for (const auto &key : existingKeys)
-            settings.remove(key);
+        settings.clear();
 
         // Write back with sequential ids reflecting the current order
         int id = 1;
@@ -445,6 +483,8 @@ void MainWindow::on_pushButtonSave_clicked() {
         qDebug().noquote() << "Saved" << languages.size()
                            << "entries to" << m_addresses[type];
     }
+
+    reloadKeyboardLayouts();
 }
 
 void MainWindow::on_pushButtonAdd_clicked() {
@@ -544,6 +584,7 @@ void MainWindow::on_pushButtonRemove_clicked() {
 
 void MainWindow::on_pushButtonInfo_clicked() {
     qDebug().noquote() << "Info clicked";
+    // TODO implement
 }
 
 void MainWindow::on_pushButtonImport_clicked() {

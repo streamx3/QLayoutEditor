@@ -68,6 +68,7 @@ private:
     RegType Index2RegType(int index);
     QString kbid2Name(QString kbid);
     QString kbid2NameFuzzy(QString kbid);
+    void reloadKeyboardLayouts();
 
 private:
     QMap<RegType, QList<Language>> m_languages;
