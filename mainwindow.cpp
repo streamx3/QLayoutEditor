@@ -1,5 +1,7 @@
 #include <qt_windows.h>
 
+#include <QSet>
+#include <QTimer>
 #include <QStandardItem>
 #include <QGuiApplication>
 #include <QStyleHints>
@@ -24,10 +26,6 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
 
     setWindowFlags(Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint);
-
-    // ui->pushButtonImport->setVisible(false);
-    // ui->pushButtonExport->setVisible(false);
-    // ui->pushButtonAdd->setVisible(false);
 
     auto scheme = QGuiApplication::styleHints()->colorScheme();
     m_isDark = (scheme == Qt::ColorScheme::Dark);
@@ -274,6 +272,9 @@ MainWindow::MainWindow(QWidget *parent)
     fetchLanguages(RegType::CurUser);
     fetchLanguages(RegType::System);
     loadLanguages(Index2RegType(ui->comboBox->currentIndex()));
+
+    // Show the first-launch welcome dialog after the main window is fully visible
+    QTimer::singleShot(0, this, [this]{ showFirstLaunchDialog(); });
 }
 
 MainWindow::~MainWindow() {
@@ -414,8 +415,7 @@ void MainWindow::on_comboBox_currentIndexChanged(int index) {
     loadLanguages(m_curType);
 }
 
-void MainWindow::reloadKeyboardLayouts()
-{
+void MainWindow::reloadKeyboardLayouts() {
     // Unload all currently loaded layouts.
     // Windows will refuse to unload the currently active one, so this is safe.
     int count = GetKeyboardLayoutList(0, nullptr);
@@ -487,6 +487,25 @@ void MainWindow::on_pushButtonSave_clicked() {
     reloadKeyboardLayouts();
 }
 
+bool MainWindow::isImeKbid(const QString &kbid) {
+    // These layouts require a full Input Method Editor (IME):
+    // the user types phonetic keystrokes that are accumulated and then
+    // converted to characters via a candidate-selection popup window.
+    // Simply writing the KBID to the Preload registry is not enough —
+    // the IME service (TextInputHost / ctfmon) and its language pack
+    // must also be installed and configured through Windows Settings.
+    static const QSet<QString> imeKbids = {
+        "00000804",   // Chinese (Simplified) – US          [Pinyin / Wubi]
+        "00001004",   // Chinese (Simplified, Singapore) – US
+        "00000404",   // Chinese (Traditional) – US         [Bopomofo / Cangjie]
+        "00000C04",   // Chinese (Traditional, Hong Kong)
+        "00001404",   // Chinese (Traditional, Macao)
+        "00000411",   // Japanese                           [Romaji/Kana → Kanji]
+        "00000412",   // Korean                             [Jamo → Hangul / Hanja]
+    };
+    return imeKbids.contains(kbid.toUpper());
+}
+
 void MainWindow::on_pushButtonAdd_clicked() {
     qDebug().noquote() << "Add clicked";
 
@@ -497,6 +516,33 @@ void MainWindow::on_pushButtonAdd_clicked() {
     const QStringList entry = dlg.selectedEntry();
     if (entry.size() < 2)
         return;
+
+    if (isImeKbid(entry[1])) {
+        QMessageBox msgBox(this);
+        msgBox.setWindowTitle(tr("IME Language — Limited Support"));
+        msgBox.setIcon(QMessageBox::Warning);
+        msgBox.setText(tr("<b>%1</b> uses a full Input Method Editor (IME) "
+                          "and cannot be fully activated by editing the registry alone.")
+                           .arg(entry[0]));
+        msgBox.setInformativeText(
+            tr("Languages that use an IME require their language pack and IME service "
+               "to be installed through <b>Windows Settings → Time &amp; Language → "
+               "Language &amp; Region</b>. Writing the keyboard ID to the Preload key "
+               "will not make the input indicator appear in the system tray for these languages."
+               "<br><br>"
+               "<b>IME-based languages:</b><br>"
+               "• Chinese (Simplified) — Pinyin, Wubi<br>"
+               "• Chinese (Traditional) — Bopomofo, Cangjie<br>"
+               "• Japanese — Romaji / Kana → Kanji conversion<br>"
+               "• Korean — Jamo composition → Hangul syllable blocks / Hanja"
+               "<br><br>"
+               "You can still add the entry to the registry, but the layout "
+               "will only function correctly after the language pack is installed via Windows Settings."));
+        msgBox.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
+        msgBox.setDefaultButton(QMessageBox::Cancel);
+        if (msgBox.exec() != QMessageBox::Ok)
+            return;
+    }
 
     Language lang;
     lang.kbid    = entry[1];
@@ -541,8 +587,7 @@ void MainWindow::on_pushButtonUp_clicked() {
 }
 
 template<typename T>
-void moveDown(QList<T>& list, int index)
-{
+void moveDown(QList<T>& list, int index) {
     if (index >= 0 && index < list.size() - 1) {
         list.swapItemsAt(index, index + 1);
     }
@@ -582,9 +627,88 @@ void MainWindow::on_pushButtonRemove_clicked() {
     }
 }
 
+void MainWindow::showFirstLaunchDialog(bool force) {
+    const QString key = "firstLaunchShown";
+    if (!force) {
+        if (m_settings.value(key, false).toBool())
+            return;
+        m_settings.setValue(key, true);
+    }
+
+    QMessageBox welcome(this);
+    welcome.setWindowTitle(tr("Welcome to QLayoutEditor"));
+
+    QPixmap icon(":/QLayoutEditor.svg");
+    if (!icon.isNull())
+        welcome.setIconPixmap(icon.scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    else
+        welcome.setIcon(QMessageBox::Information);
+
+    welcome.setText(tr("<b>Welcome to QLayoutEditor!</b>"));
+    welcome.setInformativeText(tr(
+        "This tool lets you view and edit the keyboard layout list "
+        "stored in the Windows registry, and apply changes to your "
+        "current session without logging out.<br><br>"
+        "<b>Quick start:</b><br>"
+        "• <b>User</b> / <b>System</b> — switch between the per-user "
+        "and system-wide layout lists<br>"
+        "• <b>Add / Remove</b> — add or remove keyboard layouts<br>"
+        "• <b>Up / Down</b> — reorder layouts (topmost is the default)<br>"
+        "• <b>Save</b> — write changes to the registry and reload layouts live<br>"
+        "• <b>Import / Export</b> — back up or restore your layout list as JSON<br><br>"
+        "<i>Click <b>Info</b> at any time to learn more about the app.</i>"
+    ));
+
+    welcome.setStandardButtons(QMessageBox::Ok);
+    welcome.setTextInteractionFlags(Qt::TextBrowserInteraction);
+    welcome.exec();
+}
+
 void MainWindow::on_pushButtonInfo_clicked() {
     qDebug().noquote() << "Info clicked";
-    // TODO implement
+
+    QMessageBox about(this);
+    about.setWindowTitle(tr("About QLayoutEditor"));
+
+    // Load the app icon from resources and scale it for the dialog
+    QPixmap icon(":/QLayoutEditor.svg");
+    if (!icon.isNull())
+        about.setIconPixmap(icon.scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    else
+        about.setIcon(QMessageBox::Information);
+
+    about.setText(tr("<b>QLayoutEditor</b>"));
+
+    about.setInformativeText(tr(
+        "A lightweight Windows utility for viewing and editing the keyboard layout "
+        "preload list stored in the Windows registry, with live reload support.<br><br>"
+
+        "<b>Source code:</b><br>"
+        "<a href=\"https://github.com/streamx3/QLayoutEditor\">"
+        "github.com/streamx3/QLayoutEditor</a><br><br>"
+
+        "<b>App icon:</b><br>"
+        "Derived from (but not an exact copy of) the <i>preferences-desktop-keyboard-shortcuts</i> "
+        "icon from the "
+        "<a href=\"https://github.com/elementary/icons\">elementary icon set</a>, "
+        "used under the terms of the GNU General Public License v3.<br><br>"
+
+        "<b>Acknowledgements:</b><br>"
+        "Significant portions of this project — including the IME detection logic, "
+        "registry reload mechanism, import/export support, and this dialog — "
+        "were developed with the assistance of "
+        "<a href=\"https://claude.ai\">Claude</a> (Anthropic), "
+        "an AI coding assistant.<br><br>"
+
+        "<small>Built with Qt 6 &nbsp;for&nbsp; Windows 11</small>"
+    ));
+
+    // TODO Check on Windows 10 ·
+
+    about.setStandardButtons(QMessageBox::Ok | QMessageBox::Help);
+    about.setTextInteractionFlags(Qt::TextBrowserInteraction);
+    if (about.exec() == QMessageBox::Help)
+        showFirstLaunchDialog(true);
 }
 
 void MainWindow::on_pushButtonImport_clicked() {

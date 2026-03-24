@@ -69,6 +69,8 @@ private:
     QString kbid2Name(QString kbid);
     QString kbid2NameFuzzy(QString kbid);
     void reloadKeyboardLayouts();
+    static bool isImeKbid(const QString &kbid);
+    void showFirstLaunchDialog(bool force = false);
 
 private:
     QMap<RegType, QList<Language>> m_languages;

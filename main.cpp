@@ -6,6 +6,8 @@
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
+    a.setOrganizationName("streamx3");
+    a.setApplicationName("QLayoutEditor");
     a.setWindowIcon(QIcon(":/QLayoutEditor.svg"));
     MainWindow w;
     w.show();
