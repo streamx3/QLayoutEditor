@@ -54,3 +54,9 @@ compile_commands.json
 *creator.user*
 
 *_qmlcache.qrc
+
+# Qt IFW installer data directory (contains deployed DLLs – not source)
+installer/packages/*/data/
+# WiX MSI generated artefacts (produced by build-msi.ps1)
+installer/wix/harvested.wxs
+installer/wix/LICENSE.rtf
